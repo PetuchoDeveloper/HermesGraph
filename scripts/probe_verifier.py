@@ -54,6 +54,7 @@ def cloudflare() -> dict:
             "messages": [{"role": "user", "content": PROMPT}],
             "temperature": 0,
             "max_completion_tokens": 2,
+            "chat_template_kwargs": {"enable_thinking": False},
             "logprobs": True,
             "top_logprobs": 5,
         },
