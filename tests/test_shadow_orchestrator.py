@@ -1279,6 +1279,60 @@ class PolicyAndCliTests(unittest.TestCase):
             self.assertEqual(result.policy_action, "would_reinspect")
             self.assertEqual(result.record["final_outcome"], "fail")
 
+    def test_low_score_pass_requests_reinspection_without_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('candidate')"],
+            )
+
+            class UncertainVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "PASS", "normalized_score": 0.73, "entropy": 0.58, "margin": 0.46}
+
+            result = run_manifest(manifest_path, verifier=UncertainVerifier())
+
+            self.assertEqual(result.policy_action, "would_reinspect")
+            self.assertEqual(result.record["final_outcome"], "fail")
+            self.assertFalse(result.record["repair_invoked"])
+            self.assertIn("confidence", result.record["policy_reason"])
+
+    def test_high_entropy_pass_requests_reinspection_without_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('candidate')"],
+            )
+
+            class HighEntropyVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "PASS", "normalized_score": 0.95, "entropy": 0.50, "margin": 0.90}
+
+            result = run_manifest(manifest_path, verifier=HighEntropyVerifier())
+
+            self.assertEqual(result.policy_action, "would_reinspect")
+            self.assertFalse(result.record["repair_invoked"])
+
+    def test_high_confidence_pass_still_accepts_shadow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('candidate')"],
+            )
+
+            class ConfidentVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "PASS", "normalized_score": 0.97, "entropy": 0.13, "margin": 0.94}
+
+            result = run_manifest(manifest_path, verifier=ConfidentVerifier())
+
+            self.assertEqual(result.policy_action, "accept_shadow")
+            self.assertEqual(result.record["final_outcome"], "pass")
+            self.assertFalse(result.record["repair_invoked"])
+
     def test_confirmed_fail_precedes_later_provider_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -1,0 +1,20 @@
+{
+  "task_id": "slugify-hard-fail-wrong-file",
+  "objective": "Implement slugify in slug.py so the frozen unit tests pass.",
+  "constraints": ["Keep the candidate limited to slug.py."],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The public slugify tests pass.",
+      "kind": "hard",
+      "evidence_required": ["unittest"]
+    },
+    {
+      "id": "S1",
+      "text": "slugify returns a lowercase hyphenated URL slug and strips non-alphanumeric characters.",
+      "kind": "semantic",
+      "evidence_required": ["candidate diff"]
+    }
+  ]
+}

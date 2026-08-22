@@ -38,6 +38,8 @@ MAX_TIMEOUT_SECONDS = 3_600
 MAX_BYTE_CAP = 10_000_000
 MAX_GIT_OUTPUT_BYTES = 50_000_000
 PROCESS_TERMINATION_GRACE_SECONDS = 0.25
+DEFAULT_MIN_ACCEPT_SCORE = 0.90
+DEFAULT_MAX_ACCEPT_ENTROPY = 0.40
 PROMPT_VERSION = "shadow-phase1-v1"
 SCORE_TOKEN_SET_VERSION = "pass-fail-v1"
 _CLOUDFLARE_ACCOUNT_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
@@ -1195,7 +1197,16 @@ def _clean_verifier_result(value: object) -> dict[str, Any]:
     return cleaned
 
 
-def apply_shadow_policy(risk_class: str, provider_usable: bool, verdicts: Sequence[str]) -> tuple[str, int, str]:
+def apply_shadow_policy(
+    risk_class: str,
+    provider_usable: bool,
+    verdicts: Sequence[str],
+    scores: Sequence[float] = (),
+    entropies: Sequence[float] = (),
+    *,
+    min_accept_score: float = DEFAULT_MIN_ACCEPT_SCORE,
+    max_accept_entropy: float = DEFAULT_MAX_ACCEPT_ENTROPY,
+) -> tuple[str, int, str]:
     """Return ``(action, exit_code, reason)`` for a completed shadow score."""
     if any(verdict == "FAIL" for verdict in verdicts):
         return "would_reinspect", 0, "semantic verifier failure; candidate remains unchanged"
@@ -1203,6 +1214,13 @@ def apply_shadow_policy(risk_class: str, provider_usable: bool, verdicts: Sequen
         if risk_class == "high":
             return "manual_escalation", 1, "provider unavailable or unusable for high-risk work"
         return "accept_deterministic_fallback", 0, "provider unavailable or unusable; deterministic checks passed"
+    for score, entropy in zip(scores, entropies):
+        if score < min_accept_score or entropy > max_accept_entropy:
+            return (
+                "would_reinspect",
+                0,
+                "semantic PASS lacked confidence; candidate remains unchanged",
+            )
     return "accept_shadow", 0, "all semantic verifier criteria passed"
 
 
@@ -1537,9 +1555,17 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
         _write_json(output_dir / "verifier-results.json", [])
 
     verdicts = [str(result["verdict"]) for result in verifier_results]
-    action, exit_code, reason = apply_shadow_policy(task_spec["risk_class"], provider_usable, verdicts)
+    scores = [float(result["normalized_score"]) for result in verifier_results]
+    entropies = [float(result["entropy"]) for result in verifier_results]
+    action, exit_code, reason = apply_shadow_policy(
+        task_spec["risk_class"],
+        provider_usable,
+        verdicts,
+        scores,
+        entropies,
+    )
     record["policy_reason"] = reason
-    if any(verdict == "FAIL" for verdict in verdicts):
+    if action == "would_reinspect":
         record["final_outcome"] = "fail"
     elif provider_usable:
         record["final_outcome"] = "pass"
