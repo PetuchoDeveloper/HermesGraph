@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import importlib
+import json
 import os
 from pathlib import Path
 import shutil
 import sys
 from collections.abc import Sequence
+from typing import Any
 
 
 class CandidateError(ValueError):
@@ -111,12 +114,87 @@ def apply_candidate(
     return copied
 
 
+def _jsonable(value: object) -> Any:
+    try:
+        json.dumps(value)
+    except TypeError:
+        return repr(value)
+    return value
+
+
+def record_worked_examples(destination: str | os.PathLike[str], probes: object) -> Path:
+    """Record trusted actual-versus-required examples after the candidate is applied."""
+    if not isinstance(probes, dict):
+        raise CandidateError("probes must be an object")
+    module_name = probes.get("module")
+    function_name = probes.get("function")
+    examples = probes.get("examples")
+    if not isinstance(module_name, str) or not module_name or "." in module_name or "/" in module_name:
+        raise CandidateError("probes.module must be a simple module name")
+    if not isinstance(function_name, str) or not function_name or not function_name.isidentifier():
+        raise CandidateError("probes.function must be an identifier")
+    if not isinstance(examples, list) or not examples:
+        raise CandidateError("probes.examples must be a non-empty list")
+
+    destination_root = Path(destination).resolve()
+    _reject_dotenv_path(destination_root, "destination")
+    if not destination_root.is_dir():
+        raise CandidateError(f"destination does not exist or is not a directory: {destination}")
+
+    sys.path.insert(0, str(destination_root))
+    try:
+        module = importlib.import_module(module_name)
+        function = getattr(module, function_name)
+    except Exception as exc:
+        raise CandidateError(f"could not import probe target {module_name}.{function_name}") from exc
+
+    records: list[dict[str, Any]] = []
+    for index, example in enumerate(examples):
+        if not isinstance(example, dict):
+            raise CandidateError(f"probes.examples[{index}] must be an object")
+        args = example.get("args", [])
+        kwargs = example.get("kwargs", {})
+        if "required" not in example:
+            raise CandidateError(f"probes.examples[{index}].required is required")
+        if not isinstance(args, list) or not isinstance(kwargs, dict):
+            raise CandidateError(f"probes.examples[{index}] args/kwargs are invalid")
+        required = example["required"]
+        try:
+            actual = function(*args, **kwargs)
+            error = None
+        except Exception as exc:
+            actual = None
+            error = f"{type(exc).__name__}: {exc}"
+        matches = error is None and actual == required
+        call = f"{function_name}({', '.join(repr(item) for item in args)})"
+        record = {
+            "call": call,
+            "required": _jsonable(required),
+            "actual": _jsonable(actual),
+            "matches": matches,
+        }
+        if error is not None:
+            record["error"] = error
+        records.append(record)
+
+    target = destination_root / "worked_examples.json"
+    _reject_dotenv_path(target, "worked_examples")
+    target.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return target
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Apply a frozen evaluation candidate")
     parser.add_argument("candidate_dir", help="candidate directory to copy")
     args = parser.parse_args(argv)
     try:
         copied = apply_candidate(args.candidate_dir, Path.cwd())
+        probes_path = Path(args.candidate_dir).resolve().parent / "probes.json"
+        if probes_path.is_file():
+            _reject_dotenv_path(probes_path, "probes")
+            probes = json.loads(probes_path.read_text(encoding="utf-8"))
+            record_worked_examples(Path.cwd(), probes)
+            copied.append("worked_examples.json")
     except CandidateError as exc:
         print(f"candidate error: {exc}", file=sys.stderr)
         return 2

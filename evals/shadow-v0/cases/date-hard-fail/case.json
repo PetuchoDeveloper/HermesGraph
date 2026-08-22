@@ -1,0 +1,7 @@
+{
+  "id": "date-hard-fail",
+  "family": "iso-date",
+  "ground_truth": "hard_fail",
+  "expected_policy": "reject_hard_check",
+  "verifier_should_run": false
+}

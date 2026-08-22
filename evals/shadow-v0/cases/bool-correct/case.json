@@ -1,0 +1,8 @@
+{
+  "id": "bool-correct",
+  "family": "parse-bool",
+  "ground_truth": "good",
+  "expected_policy": "accept_shadow",
+  "verifier_should_run": true,
+  "fake_verdict": "PASS"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "hex-correct",
+  "family": "hex-color",
+  "ground_truth": "good",
+  "expected_policy": "accept_shadow",
+  "verifier_should_run": true,
+  "fake_verdict": "PASS"
+}

@@ -1,0 +1,26 @@
+{
+  "task_id": "bool-true-false-only",
+  "objective": "Parse common boolean aliases, not only the literals true and false.",
+  "constraints": [
+    "Keep the candidate limited to flag.py."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The public unit tests pass.",
+      "kind": "hard",
+      "evidence_required": [
+        "unittest"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "parse_bool('YES'), parse_bool('1'), and parse_bool('on') must be True. parse_bool('NO') and parse_bool('0') must be False. Matching is case-insensitive.",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}

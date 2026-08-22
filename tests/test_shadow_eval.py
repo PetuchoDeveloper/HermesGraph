@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
-from apply_eval_candidate import CandidateError, apply_candidate  # noqa: E402
+from apply_eval_candidate import CandidateError, apply_candidate, record_worked_examples  # noqa: E402
 from run_shadow_eval import (  # noqa: E402
     ScriptedVerifier,
     load_suite,
@@ -57,6 +57,26 @@ class CandidateApplierTests(unittest.TestCase):
             with self.assertRaisesRegex(CandidateError, "traversal"):
                 apply_candidate(candidate, destination, relative_paths=["../escape.txt"])
 
+    def test_record_worked_examples_writes_actual_versus_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "color.py").write_text(
+                "def normalize_hex_color(value: str) -> str:\n    return value.strip().lower()\n",
+                encoding="utf-8",
+            )
+            probes = {
+                "module": "color",
+                "function": "normalize_hex_color",
+                "examples": [{"args": ["#ABC"], "required": "#aabbcc"}],
+            }
+
+            path = record_worked_examples(root, probes)
+
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(payload[0]["required"], "#aabbcc")
+            self.assertEqual(payload[0]["actual"], "#abc")
+            self.assertFalse(payload[0]["matches"])
+
 
 class LoaderTests(unittest.TestCase):
     def test_loader_rejects_unknown_ground_truth(self) -> None:
@@ -83,7 +103,7 @@ class LoaderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ground_truth"):
                 load_suite(root / "suite.json")
 
-    def test_loader_accepts_ten_case_ids(self) -> None:
+    def test_loader_accepts_thirty_four_case_ids(self) -> None:
         suite_path = Path(__file__).parents[1] / "evals" / "shadow-v0" / "suite.json"
 
         suite = load_suite(suite_path)
@@ -101,6 +121,30 @@ class LoaderTests(unittest.TestCase):
                 "slugify-double-hyphen",
                 "slugify-hard-fail-wrong-file",
                 "slugify-extra-file",
+                "hex-correct",
+                "hex-no-expand",
+                "hex-hard-fail",
+                "hex-cheat-literals",
+                "hex-rejects-short",
+                "hex-injection",
+                "hex-hard-fail-wrong-file",
+                "hex-extra-file",
+                "ws-correct",
+                "ws-strip-only",
+                "ws-cheat-literals",
+                "ws-hard-fail",
+                "bool-correct",
+                "bool-true-false-only",
+                "bool-cheat-literals",
+                "bool-hard-fail",
+                "clamp-correct",
+                "clamp-identity",
+                "clamp-cheat-literals",
+                "clamp-hard-fail",
+                "date-correct",
+                "date-no-pad",
+                "date-cheat-literals",
+                "date-hard-fail",
             ],
         )
 
@@ -221,17 +265,17 @@ class CaseRunnerTests(unittest.TestCase):
             )
 
             self.assertTrue(report["all_matched"])
-            self.assertEqual(report["matched"], 10)
-            self.assertEqual(report["total"], 10)
+            self.assertEqual(report["matched"], 34)
+            self.assertEqual(report["total"], 34)
             self.assertFalse(report["repair_invoked_any"])
             self.assertFalse(report["hashes_changed_any"])
-            self.assertEqual(report["hard_fail_short_circuits"], 2)
-            self.assertEqual(report["confusion"]["tp"], 6)
-            self.assertEqual(report["confusion"]["tn"], 2)
+            self.assertEqual(report["hard_fail_short_circuits"], 8)
+            self.assertEqual(report["confusion"]["tp"], 19)
+            self.assertEqual(report["confusion"]["tn"], 7)
             self.assertEqual(report["confusion"]["fp"], 0)
             self.assertEqual(report["confusion"]["fn"], 0)
             persisted = json.loads(report_path.read_text(encoding="utf-8"))
-            self.assertEqual(persisted["matched"], 10)
+            self.assertEqual(persisted["matched"], 34)
             self.assertEqual(exit_code, 0)
 
     def test_materialize_case_creates_clean_git_repo_from_baseline(self) -> None:
