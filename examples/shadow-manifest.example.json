@@ -1,0 +1,36 @@
+{
+  "run_id": "shadow-example-001",
+  "task_spec": "task-spec.example.json",
+  "worktree": "../candidate-worktree",
+  "worker": {
+    "command": [
+      "python3",
+      "-c",
+      "from pathlib import Path; Path('candidate.txt').write_text('VERIFIED\\n', encoding='utf-8')"
+    ],
+    "timeout_seconds": 60
+  },
+  "hard_checks": [
+    {
+      "id": "candidate-exists",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; assert Path('candidate.txt').read_text(encoding='utf-8') == 'VERIFIED\\n'"
+      ],
+      "timeout_seconds": 30
+    }
+  ],
+  "candidate_paths": ["candidate.txt"],
+  "output_dir": "../.shadow-runs/shadow-example-001",
+  "provider": {
+    "name": "cloudflare-workers-ai",
+    "model": "@cf/zai-org/glm-4.7-flash",
+    "top_logprobs": 5,
+    "max_completion_tokens": 2
+  },
+  "caps": {
+    "evidence_bytes": 12000,
+    "output_bytes": 64000
+  }
+}

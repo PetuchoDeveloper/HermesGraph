@@ -87,21 +87,54 @@ def openrouter() -> dict:
     )
 
 
-def summarize(response: dict) -> None:
+def validate_response(response: object) -> bool:
+    if not isinstance(response, dict):
+        return False
+
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return False
+
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        return False
+
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        return False
+    content = message.get("content")
+    if content != "PASS" and content != "FAIL":
+        return False
+
+    logprobs = choice.get("logprobs")
+    if not isinstance(logprobs, dict):
+        return False
+
+    positions = logprobs.get("content")
+    return isinstance(positions, list) and any(isinstance(position, dict) for position in positions)
+
+
+def summarize(response: dict) -> bool:
     print(json.dumps(response, indent=2))
     try:
         choice = response["choices"][0]
         content = choice.get("message", {}).get("content")
         logprobs = choice.get("logprobs")
-    except (KeyError, IndexError, TypeError):
+    except (AttributeError, KeyError, IndexError, TypeError):
         print("\nCould not find an OpenAI-compatible choices[0] response.", file=sys.stderr)
-        return
+        return False
 
     print("\n--- probe summary ---")
     print(f"completion: {content!r}")
     print(f"logprobs returned: {bool(logprobs)}")
-    if not logprobs:
-        print("Provider/model did not return usable logprobs. Do not enable it as a LAV verifier.")
+    usable = validate_response(response)
+    if not usable:
+        print(
+            "Provider/model did not return a usable PASS/FAIL verdict with output logprobs. "
+            "Do not enable it as a LAV verifier.",
+            file=sys.stderr,
+        )
+    return usable
 
 
 def main() -> int:
@@ -111,8 +144,7 @@ def main() -> int:
 
     try:
         response = cloudflare() if args.provider == "cloudflare" else openrouter()
-        summarize(response)
-        return 0
+        return 0 if summarize(response) else 1
     except Exception as exc:
         print(f"probe failed: {exc}", file=sys.stderr)
         return 1

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shadow-manifest.schema.json",
+  "title": "HermesGraph Phase 1 Shadow Manifest",
+  "type": "object",
+  "required": ["run_id", "task_spec", "worktree", "worker", "hard_checks", "output_dir", "provider"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "task_spec": {"type": "string", "minLength": 1},
+    "worktree": {"type": "string", "minLength": 1},
+    "output_dir": {"type": "string", "minLength": 1},
+    "allow_dirty_baseline": {"type": "boolean", "default": false},
+    "worker": {"$ref": "#/$defs/commandSpec"},
+    "hard_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "command", "timeout_seconds"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "command": {"$ref": "#/$defs/argv"},
+          "timeout_seconds": {"$ref": "#/$defs/timeout"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "candidate_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?![/\\\\])(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$))(?!.*(^|[/\\\\])\\.env([/\\\\]|$))(?!.*[:*?\\[\\]]).+$"
+      },
+      "uniqueItems": true
+    },
+    "provider": {
+      "type": "object",
+      "properties": {
+        "name": {"enum": ["cloudflare", "cloudflare-workers-ai", "cloudflare_workers_ai"]},
+        "provider": {"enum": ["cloudflare", "cloudflare-workers-ai", "cloudflare_workers_ai"]},
+        "model": {"type": "string", "minLength": 1},
+        "top_logprobs": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_completion_tokens": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "completion_budget": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "timeout_seconds": {"$ref": "#/$defs/timeout"},
+        "response_byte_cap": {"$ref": "#/$defs/byteCap"}
+      },
+      "additionalProperties": false
+    },
+    "caps": {
+      "type": "object",
+      "properties": {
+        "evidence_bytes": {"$ref": "#/$defs/byteCap"},
+        "output_bytes": {"$ref": "#/$defs/byteCap"}
+      },
+      "additionalProperties": false
+    },
+    "evidence_byte_cap": {"$ref": "#/$defs/byteCap"},
+    "output_byte_cap": {"$ref": "#/$defs/byteCap"}
+  },
+  "$defs": {
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "timeout": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    },
+    "byteCap": {
+      "type": "integer",
+      "minimum": 256,
+      "maximum": 10000000
+    },
+    "commandSpec": {
+      "type": "object",
+      "required": ["command", "timeout_seconds"],
+      "properties": {
+        "command": {"$ref": "#/$defs/argv"},
+        "timeout_seconds": {"$ref": "#/$defs/timeout"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

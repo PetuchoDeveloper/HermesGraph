@@ -1,13 +1,29 @@
 {
   "task_id": "example-001",
   "objective": "Return a small artifact that satisfies the supplied criteria.",
-  "risk": "low",
+  "constraints": [
+    "Keep the candidate limited to candidate.txt.",
+    "Do not include secrets or credentials."
+  ],
+  "risk_class": "low",
   "criteria": [
     {
       "id": "C1",
-      "text": "The artifact must contain the exact string VERIFIED.",
-      "hard": true
+      "text": "The candidate contains the exact string VERIFIED.",
+      "kind": "semantic",
+      "evidence_required": ["candidate diff"]
+    },
+    {
+      "id": "C2",
+      "text": "The candidate is a small text artifact.",
+      "kind": "semantic",
+      "evidence_required": ["candidate diff", "deterministic checks"]
+    },
+    {
+      "id": "H1",
+      "text": "The candidate file exists and has the expected exact contents.",
+      "kind": "hard",
+      "evidence_required": ["candidate-exists check"]
     }
-  ],
-  "token_budget": 24000
+  ]
 }
