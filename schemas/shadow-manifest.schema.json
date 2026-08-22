@@ -60,7 +60,15 @@
       "additionalProperties": false
     },
     "evidence_byte_cap": {"$ref": "#/$defs/byteCap"},
-    "output_byte_cap": {"$ref": "#/$defs/byteCap"}
+    "output_byte_cap": {"$ref": "#/$defs/byteCap"},
+    "stage2": {
+      "type": "object",
+      "properties": {
+        "allow_one_repair": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "repair": {"$ref": "#/$defs/commandSpec"}
   },
   "$defs": {
     "argv": {

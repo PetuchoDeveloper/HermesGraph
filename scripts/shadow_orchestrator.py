@@ -86,7 +86,10 @@ _ALLOWED_MANIFEST_KEYS = {
     "evidence_byte_cap",
     "output_byte_cap",
     "allow_dirty_baseline",
+    "stage2",
+    "repair",
 }
+_ALLOWED_STAGE2_KEYS = {"allow_one_repair"}
 _ALLOWED_COMMAND_KEYS = {"command", "timeout_seconds"}
 _ALLOWED_CHECK_KEYS = {"id", "command", "timeout_seconds"}
 _ALLOWED_CAP_KEYS = {"evidence_bytes", "output_bytes"}
@@ -277,6 +280,28 @@ def validate_manifest(manifest: object) -> dict[str, Any]:
     _validate_byte_cap(evidence_cap, "evidence_byte_cap", DEFAULT_EVIDENCE_BYTE_CAP)
     _validate_byte_cap(output_cap, "output_byte_cap", DEFAULT_OUTPUT_BYTE_CAP)
     validated["caps"] = dict(caps)
+
+    stage2 = manifest.get("stage2", {})
+    if stage2 == {} or stage2 is None:
+        stage2 = {}
+    if not isinstance(stage2, dict):
+        raise ManifestError("stage2 must be an object")
+    _reject_unknown_keys(stage2, _ALLOWED_STAGE2_KEYS, "stage2")
+    allow_one_repair = bool(stage2.get("allow_one_repair", False))
+    validated["stage2"] = {"allow_one_repair": allow_one_repair}
+
+    repair = manifest.get("repair")
+    if repair is None:
+        validated["repair"] = None
+    else:
+        if not isinstance(repair, dict):
+            raise ManifestError("repair must be an object")
+        _reject_unknown_keys(repair, _ALLOWED_COMMAND_KEYS, "repair")
+        _validate_argv(repair.get("command"), "repair.command")
+        _validate_timeout(repair.get("timeout_seconds"), "repair.timeout_seconds")
+        validated["repair"] = dict(repair)
+    if allow_one_repair and validated["repair"] is None:
+        raise ManifestError("stage2.allow_one_repair requires a repair command")
 
     provider = manifest.get("provider")
     if not isinstance(provider, dict):
@@ -1297,6 +1322,80 @@ def _write_reinspect_instruction(output_dir: Path, instruction: str) -> dict[str
     }
 
 
+def _snapshot_worktree_files(worktree: Path, relative_paths: Sequence[str]) -> dict[str, bytes | None]:
+    snapshot: dict[str, bytes | None] = {}
+    for relative in relative_paths:
+        path = worktree / relative
+        if path.is_file() and not path.is_symlink():
+            snapshot[relative] = path.read_bytes()
+        else:
+            snapshot[relative] = None
+    return snapshot
+
+
+def _restore_worktree_files(worktree: Path, snapshot: Mapping[str, bytes | None]) -> None:
+    for relative, content in snapshot.items():
+        path = worktree / relative
+        if content is None:
+            if path.is_file() and not path.is_symlink():
+                path.unlink()
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+
+def _score_current_candidate(
+    *,
+    task_spec: Mapping[str, Any],
+    candidate_diff: bytes,
+    deterministic_summaries: Sequence[Mapping[str, Any]],
+    evidence_cap: int,
+    score_provider: object | None,
+    output_dir: Path,
+    record: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
+    constraints = task_spec.get("constraints", [])
+    semantic_criteria = [criterion for criterion in task_spec["criteria"] if criterion["kind"] == "semantic"]
+    packet_records: list[dict[str, Any]] = []
+    packets_for_verifier: list[tuple[dict[str, Any], str]] = []
+    for criterion in semantic_criteria:
+        packet = _build_evidence_packet(
+            criterion,
+            constraints,
+            candidate_diff,
+            deterministic_summaries,
+            evidence_cap,
+        )
+        packet_hash = _sha256(_canonical_json(packet))
+        packets_for_verifier.append((packet, packet_hash))
+        packet_record = dict(packet)
+        packet_record["packet_sha256"] = packet_hash
+        packet_records.append(packet_record)
+    verifier_results: list[dict[str, Any]] = []
+    provider_usable = True
+    for index, (packet, packet_hash) in enumerate(packets_for_verifier):
+        if score_provider is None:
+            raise ProviderUnavailable("verifier provider is required")
+        score_method = getattr(score_provider, "score", None)
+        if not callable(score_method):
+            raise ProviderUnavailable("verifier provider has no score method")
+        scored = score_method(packet)
+        raw_response = scored.get("raw_response") if isinstance(scored, dict) else None
+        normalized = _clean_verifier_result(scored)
+        normalized["evidence_hash"] = packet_hash
+        if raw_response is not None:
+            normalized["raw_response_artifact"] = _write_raw_response(output_dir, index + 100, raw_response)
+        verifier_results.append(normalized)
+        usage = normalized.get("usage")
+        if isinstance(usage, dict):
+            record["provider_usage"].append(_redact_provider_value(usage))
+    record["evidence_packets"] = packet_records
+    record["verifier_results"] = verifier_results
+    _write_json(output_dir / "evidence-packets.json", packet_records)
+    _write_json(output_dir / "verifier-results.json", verifier_results)
+    return packet_records, verifier_results, provider_usable
+
+
 def _base_record(manifest: dict[str, Any], task_spec: dict[str, Any]) -> dict[str, Any]:
     return {
         "run_id": manifest["run_id"],
@@ -1638,14 +1737,97 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
         entropies,
     )
     record["policy_reason"] = reason
+    record["repair_invoked"] = False
+    record["rollback_used"] = False
+    record["intervention_outcome"] = "NONE"
+
+    stage2_enabled = bool(manifest.get("stage2", {}).get("allow_one_repair")) and manifest.get("repair")
+    if action == "would_reinspect" and stage2_enabled:
+        snapshot_paths = list(candidate_paths) or ["candidate.txt"]
+        pre_repair = _snapshot_worktree_files(worktree, snapshot_paths)
+        pre_hash = record.get("final_candidate_hash") or record.get("initial_candidate_hash")
+        repair_spec = manifest["repair"]
+        repair_result = _run_command(
+            repair_spec["command"],
+            worktree,
+            repair_spec["timeout_seconds"],
+            output_cap,
+        )
+        record["repair"] = repair_result
+        record["repair_invoked"] = True
+        if repair_result["timed_out"] or repair_result["returncode"] != 0:
+            _restore_worktree_files(worktree, pre_repair)
+            record["rollback_used"] = True
+            record["intervention_outcome"] = "HARMED"
+        else:
+            post_checks: list[dict[str, Any]] = []
+            checks_ok = True
+            for check_spec in manifest["hard_checks"]:
+                check_result = _run_command(
+                    check_spec["command"],
+                    worktree,
+                    check_spec["timeout_seconds"],
+                    output_cap,
+                )
+                check_result["id"] = check_spec["id"]
+                check_result["authority"] = "A2"
+                check_result["passed"] = not check_result["timed_out"] and check_result["returncode"] == 0
+                post_checks.append(check_result)
+                if not check_result["passed"]:
+                    checks_ok = False
+            record["post_repair_hard_checks"] = post_checks
+            if not checks_ok:
+                _restore_worktree_files(worktree, pre_repair)
+                record["rollback_used"] = True
+                record["intervention_outcome"] = "HARMED"
+            else:
+                repaired_diff = _capture_candidate_bytes(worktree, candidate_paths)
+                candidate_record = _persist_candidate_capture(record, output_dir, repaired_diff, candidate_paths)
+                repaired_diff = _redact_artifact_bytes(repaired_diff)
+                if candidate_record["diff_sha256"] == pre_hash:
+                    record["intervention_outcome"] = "WASTED"
+                else:
+                    summaries = [
+                        {
+                            "id": check["id"],
+                            "authority": check["authority"],
+                            "returncode": check["returncode"],
+                            "timed_out": check["timed_out"],
+                            "passed": check["passed"],
+                        }
+                        for check in (post_checks or record["hard_checks"])
+                    ]
+                    packet_records, verifier_results, provider_usable = _score_current_candidate(
+                        task_spec=task_spec,
+                        candidate_diff=repaired_diff,
+                        deterministic_summaries=summaries,
+                        evidence_cap=evidence_cap,
+                        score_provider=score_provider,
+                        output_dir=output_dir,
+                        record=record,
+                    )
+                    verdicts = [str(result["verdict"]) for result in verifier_results]
+                    scores = [float(result["normalized_score"]) for result in verifier_results]
+                    entropies = [float(result["entropy"]) for result in verifier_results]
+                    action, exit_code, reason = apply_shadow_policy(
+                        task_spec["risk_class"],
+                        provider_usable,
+                        verdicts,
+                        scores,
+                        entropies,
+                    )
+                    record["policy_reason"] = reason
+                    if action == "accept_shadow":
+                        record["intervention_outcome"] = "HELPED"
+                    else:
+                        record["intervention_outcome"] = "WASTED"
+
     if action == "would_reinspect":
         record["final_outcome"] = "fail"
     elif provider_usable:
         record["final_outcome"] = "pass"
     else:
         record["final_outcome"] = "unknown"
-    # This is a shadow run: no score or policy branch may mutate or repair the candidate.
-    record["repair_invoked"] = False
     if action == "would_reinspect":
         instruction = build_reinspect_instruction(
             task_spec,

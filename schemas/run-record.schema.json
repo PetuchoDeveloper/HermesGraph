@@ -55,7 +55,7 @@
     "hard_checks": {"type": "array", "items": {"type": "object"}},
     "evidence_packets": {"type": "array", "items": {"type": "object"}},
     "verifier_results": {"type": "array", "items": {"type": "object"}},
-    "repair_invoked": {"const": false},
+    "repair_invoked": {"type": "boolean"},
     "error": {"type": "string"},
     "intervention_outcome": {"enum": ["HELPED", "HARMED", "WASTED", "MISSED", "NONE"]},
     "rollback_used": {"type": "boolean"},

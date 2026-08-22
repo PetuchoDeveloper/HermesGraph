@@ -57,7 +57,11 @@ The Phase 1 runner writes `reinspect-instruction.md` when policy is
 
 ### Stage 2 - Controlled repair
 
-Allow one targeted Luna repair. Preserve both initial and repaired candidates so objective outcome can classify HELPED/HARMED/WASTED/MISSED.
+Allow one targeted repair when `stage2.allow_one_repair` is true and a
+repair argv command is set. Preserve the pre-repair files. If post-repair
+hard checks fail, restore those files and label HARMED. If the rescore
+becomes `accept_shadow`, label HELPED. If the candidate is unchanged or
+still `would_reinspect`, label WASTED. Never loop.
 
 ### Stage 3 - Adaptive escalation
 
