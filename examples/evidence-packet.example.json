@@ -1,0 +1,12 @@
+{
+  "task_id": "example-001",
+  "candidate_sha256": "replace-with-real-sha256",
+  "criterion_id": "C1",
+  "criterion": "The artifact must contain the exact string VERIFIED.",
+  "evidence": [
+    {
+      "source": "candidate",
+      "excerpt": "This artifact is VERIFIED."
+    }
+  ]
+}

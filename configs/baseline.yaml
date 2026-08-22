@@ -1,0 +1,89 @@
+version: "0.2"
+name: luna-free-verifier-baseline
+
+worker:
+  provider: openai
+  model: gpt-5.6-luna
+  owns_artifact: true
+  owns_repairs: true
+
+verification:
+  deterministic_first: true
+  criteria_per_call: 1
+  max_primary_samples: 1
+  uncertainty_samples: 3
+  max_repairs_per_criterion: 1
+  weak_verifier_can_rewrite: false
+  weak_verifier_can_hard_reject: false
+  preserve_initial_candidate: true
+  rollback_on_regression: true
+
+providers:
+  primary:
+    provider: cloudflare-workers-ai
+    model: "@cf/zai-org/glm-4.7-flash"
+    requires_logprobs: true
+    top_logprobs: 20
+    max_completion_tokens: 1
+    quota_class: recurring_free_shared_cloudflare
+
+  independent:
+    provider: openrouter
+    model: openai/gpt-oss-20b:free
+    requires_logprobs: true
+    top_logprobs: 20
+    max_completion_tokens: 1
+    capability_probe_required: true
+    pin_model: true
+    quota_class: recurring_free_request_limited
+
+  benchmark_strong:
+    provider: cerebras
+    model: gpt-oss-120b
+    enabled: false
+    recurring_free: false
+    capability_probe_required: true
+    quota_class: trial_or_payg_only
+
+  diversity:
+    provider: cloudflare-workers-ai
+    model: "@cf/google/gemma-4-26b-a4b-it"
+    enabled: false
+    requires_logprobs: true
+    top_logprobs: 20
+    max_completion_tokens: 1
+    quota_class: recurring_free_shared_cloudflare
+
+  local_optional:
+    provider: openai-compatible
+    model: ornith-35b-a3b
+    enabled: false
+    health_probe_required: true
+    blocking: false
+
+quota_policy:
+  cloudflare_reserve_fraction: 0.20
+  retry_provider_errors: false
+  fail_soft_risk_classes: [low, medium]
+  fail_closed_risk_classes: [high]
+
+policy:
+  # Placeholders. Calibrate before enabling intervention.
+  intervention_enabled: false
+  primary_high_confidence_failure: 0.90
+  primary_uncertainty_entropy: 0.90
+  primary_low_margin: 0.15
+  independent_mandatory_reinspection_confidence: 0.95
+
+repair:
+  instruction: >-
+    A verifier flagged the specified criterion. The verifier may be wrong.
+    Independently inspect the task contract and cited evidence. Preserve the
+    current artifact if it is already correct; otherwise make the smallest
+    repair that resolves the confirmed defect without regressing passing checks.
+
+telemetry:
+  record_raw_logprobs: true
+  record_provider_usage: true
+  record_candidate_hashes: true
+  classify_intervention_outcome: true

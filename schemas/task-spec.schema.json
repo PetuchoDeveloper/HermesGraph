@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task-spec.schema.json",
+  "title": "TaskSpec",
+  "type": "object",
+  "required": ["task_id", "objective", "criteria", "risk_class"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "objective": {"type": "string"},
+    "constraints": {"type": "array", "items": {"type": "string"}},
+    "risk_class": {"enum": ["low", "medium", "high"]},
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "kind"],
+        "properties": {
+          "id": {"type": "string"},
+          "text": {"type": "string"},
+          "kind": {"enum": ["hard", "semantic"]},
+          "evidence_required": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

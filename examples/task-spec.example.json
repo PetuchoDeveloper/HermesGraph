@@ -1,0 +1,13 @@
+{
+  "task_id": "example-001",
+  "objective": "Return a small artifact that satisfies the supplied criteria.",
+  "risk": "low",
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "The artifact must contain the exact string VERIFIED.",
+      "hard": true
+    }
+  ],
+  "token_budget": 24000
+}

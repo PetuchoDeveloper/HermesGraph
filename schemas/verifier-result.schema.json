@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verifier-result.schema.json",
+  "title": "VerifierResult",
+  "type": "object",
+  "required": [
+    "criterion_id", "provider", "model", "prompt_version",
+    "score_token_set_version", "expected_score", "normalized_score",
+    "entropy", "margin", "raw_logprobs", "artifact_hash", "evidence_hash"
+  ],
+  "properties": {
+    "criterion_id": {"type": "string"},
+    "provider": {"type": "string"},
+    "model": {"type": "string"},
+    "prompt_version": {"type": "string"},
+    "score_token_set_version": {"type": "string"},
+    "expected_score": {"type": "number"},
+    "normalized_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "entropy": {"type": "number", "minimum": 0},
+    "margin": {"type": "number", "minimum": 0, "maximum": 1},
+    "abstain": {"type": "boolean"},
+    "evidence_sufficient": {"type": "boolean"},
+    "raw_logprobs": {"type": "object", "additionalProperties": {"type": "number"}},
+    "artifact_hash": {"type": "string"},
+    "evidence_hash": {"type": "string"},
+    "usage": {
+      "type": "object",
+      "properties": {
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "quota_units": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

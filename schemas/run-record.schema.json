@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-record.schema.json",
+  "title": "RunRecord",
+  "type": "object",
+  "required": [
+    "run_id", "task_id", "system_id", "initial_candidate_hash",
+    "initial_outcome", "final_candidate_hash", "final_outcome"
+  ],
+  "properties": {
+    "run_id": {"type": "string"},
+    "task_id": {"type": "string"},
+    "system_id": {"type": "string"},
+    "seed": {"type": "integer"},
+    "initial_candidate_hash": {"type": "string"},
+    "final_candidate_hash": {"type": "string"},
+    "initial_outcome": {"enum": ["pass", "fail", "unknown"]},
+    "final_outcome": {"enum": ["pass", "fail", "unknown"]},
+    "intervention_outcome": {"enum": ["HELPED", "HARMED", "WASTED", "MISSED", "NONE"]},
+    "rollback_used": {"type": "boolean"},
+    "luna_tokens": {"type": "integer", "minimum": 0},
+    "verifier_tokens": {"type": "integer", "minimum": 0},
+    "verifier_results": {"type": "array"},
+    "provider_errors": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
