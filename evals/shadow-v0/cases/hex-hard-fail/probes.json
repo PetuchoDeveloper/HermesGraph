@@ -1,0 +1,12 @@
+{
+  "module": "color",
+  "function": "normalize_hex_color",
+  "examples": [
+    {
+      "args": [
+        "#ABC"
+      ],
+      "required": "#aabbcc"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "module": "slug",
+  "function": "slugify",
+  "examples": [
+    {
+      "args": [
+        "Hello, World!"
+      ],
+      "required": "hello-world"
+    },
+    {
+      "args": [
+        "Foo Bar"
+      ],
+      "required": "foo-bar"
+    }
+  ]
+}

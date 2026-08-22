@@ -1,0 +1,18 @@
+{
+  "module": "flag",
+  "function": "parse_bool",
+  "examples": [
+    {
+      "args": [
+        "YES"
+      ],
+      "required": true
+    },
+    {
+      "args": [
+        "1"
+      ],
+      "required": true
+    }
+  ]
+}

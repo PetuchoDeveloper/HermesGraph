@@ -1,0 +1,26 @@
+{
+  "task_id": "ws-correct",
+  "objective": "Collapse whitespace runs to a single space and trim the ends.",
+  "constraints": [
+    "Keep the candidate limited to textutil.py."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The public unit tests pass.",
+      "kind": "hard",
+      "evidence_required": [
+        "unittest"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "collapse_ws('a   b') must be 'a b'. Trim ends and collapse any internal whitespace run to one space.",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}

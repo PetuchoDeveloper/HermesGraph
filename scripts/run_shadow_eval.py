@@ -173,6 +173,8 @@ def _candidate_paths(candidate_dir: Path) -> list[str]:
             paths.append(relative)
     if not paths:
         raise SuiteError(f"candidate directory is empty: {candidate_dir}")
+    if (candidate_dir.parent / "probes.json").is_file() and "worked_examples.json" not in paths:
+        paths.append("worked_examples.json")
     return sorted(paths)
 
 

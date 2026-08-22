@@ -1,0 +1,22 @@
+{
+  "module": "num",
+  "function": "clamp_int",
+  "examples": [
+    {
+      "args": [
+        20,
+        0,
+        10
+      ],
+      "required": 10
+    },
+    {
+      "args": [
+        -3,
+        0,
+        10
+      ],
+      "required": 0
+    }
+  ]
+}

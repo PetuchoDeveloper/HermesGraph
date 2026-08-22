@@ -42,9 +42,10 @@ Promotion gate before intervention:
 - no assumption that raw probabilities are calibrated across models.
 
 Local Stage 0 harness: `evals/shadow-v0`. Run
-`python3 scripts/run_shadow_eval.py evals/shadow-v0 --offline` to score ten
-frozen slugify cases without repair. Offline matches prove the harness, not
-Cloudflare calibration. A later live pass can reuse the same labels.
+`python3 scripts/run_shadow_eval.py evals/shadow-v0 --offline` to score the
+frozen slugify and held-out hex-color cases without repair. Offline matches
+prove the harness, not Cloudflare calibration. Live hex scoring must keep the
+slugify-fitted 0.90 / 0.40 gate.
 
 ### Stage 1 - Shadow intervention
 

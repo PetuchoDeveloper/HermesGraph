@@ -1,0 +1,12 @@
+{
+  "module": "textutil",
+  "function": "collapse_ws",
+  "examples": [
+    {
+      "args": [
+        "a   b"
+      ],
+      "required": "a b"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "hex-hard-fail",
+  "family": "hex-color",
+  "ground_truth": "hard_fail",
+  "expected_policy": "reject_hard_check",
+  "verifier_should_run": false
+}

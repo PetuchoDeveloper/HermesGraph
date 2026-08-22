@@ -1,0 +1,26 @@
+{
+  "task_id": "clamp-identity",
+  "objective": "Clamp an integer into an inclusive [low, high] range.",
+  "constraints": [
+    "Keep the candidate limited to num.py."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The public unit tests pass.",
+      "kind": "hard",
+      "evidence_required": [
+        "unittest"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "clamp_int(20, 0, 10) must be 10. clamp_int(-3, 0, 10) must be 0. Values inside the range stay unchanged.",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}
