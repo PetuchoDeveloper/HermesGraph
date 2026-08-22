@@ -27,14 +27,32 @@ Normalize returned logprobs into a common `VerifierResult` schema while retainin
 
 ## Phase 1 - Luna shadow-verification harness
 
-Run normal Hermes/Luna tasks unchanged.
+Run normal Hermes/Luna tasks unchanged. The checked-in
+`scripts/shadow_orchestrator.py` is the external, automatic Phase 1 harness:
 
-After each candidate:
-1. collect objective evidence,
-2. build criterion packets,
-3. score them with the primary verifier,
-4. record what action the gate *would* take,
-5. do not alter Luna's result.
+1. Parse a manifest and TaskSpec before starting the worker.
+2. Prove the candidate path is a Git root and reject a dirty baseline unless `allow_dirty_baseline` is explicitly enabled.
+3. Reject `.env` manifest, TaskSpec, worktree, output, and candidate paths before content loading.
+4. Run the worker and sequential A2 hard checks as argv arrays with bounded output. A timeout terminates the command and its descendants as one process group.
+5. Remove Cloudflare credentials from worker, hard-check, and internal Git environments.
+6. Capture a deterministic, read-only layered snapshot: staged `HEAD -> index`, unstaged `index -> worktree`, and per-path untracked diffs. Literal `candidate_paths` can limit the scope. Capture does not change the real index, worktree status, or Git object database. Active Git clean filters are rejected before content inspection.
+7. Persist the scoped `candidate.diff` and SHA-256 hash. Only a bounded excerpt enters each compact semantic evidence packet; worker stdout and transcripts do not enter packets.
+8. Score each packet with Cloudflare GLM at the fixed `https://api.cloudflare.com` account endpoint. Manifest endpoint and header overrides are rejected, account identifiers cannot alter the URL path, and redirects are not followed. Credentials come only from the process environment. Requests use `enable_thinking: false`, exact PASS/FAIL, bounded response bodies, and both score alternatives in the first output-position top-logprobs.
+9. Normalize PASS probability, binary entropy, and margin, then persist a raw provider response with authorization fields and configured credential values removed.
+10. Record the shadow action without invoking repair: `accept_shadow` for all semantic PASS, `would_reinspect` for any confirmed semantic FAIL, deterministic fallback for low/medium provider failure, and manual escalation for high-risk provider failure.
+
+Each run requires a new or empty artifact directory. Failed workers and hard checks receive a best-effort candidate snapshot for audit. Phase 1 never repairs or replaces candidate content.
+
+A local invocation is:
+
+```bash
+python3 scripts/shadow_orchestrator.py examples/shadow-manifest.example.json
+```
+
+The manifest schema is `schemas/shadow-manifest.schema.json`. Artifacts are
+written outside the candidate worktree and include `run-record.json`,
+`candidate.diff`, `candidate.json`, `evidence-packets.json`,
+`verifier-results.json`, and redacted `provider-response-*.json` files.
 
 This establishes verifier calibration without risking worker degradation.
 

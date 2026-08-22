@@ -120,13 +120,33 @@ Treat these as experiment gates, not claims:
 ```bash
 git clone https://github.com/PetuchoDeveloper/HermesGraph.git
 cd HermesGraph
-cp .env.example .env
-# Fill one provider, then:
-set -a && . ./.env && set +a
+# Inject provider credentials into the process environment with your secret manager.
 python3 scripts/probe_verifier.py --provider cloudflare
 ```
 
-See [`QUICKSTART.md`](QUICKSTART.md) for Cloudflare/OpenRouter setup and the first shadow-mode experiment.
+The probe is only a capability check. For the automatic Phase 1 shadow path,
+prepare a disposable Git repository whose baseline is clean, then run the
+manifest-driven orchestrator:
+
+```bash
+mkdir -p candidate-worktree
+cd candidate-worktree
+git init -q
+git config user.email shadow@example.invalid
+git config user.name shadow
+printf 'baseline\n' > README.txt
+git add README.txt && git commit -qm baseline
+cd ..
+python3 scripts/shadow_orchestrator.py examples/shadow-manifest.example.json
+```
+
+The example manifest uses a relative TaskSpec, literal candidate paths, and a fresh artifact folder. Set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the process environment through a secret manager. The runner rejects `.env` input paths and never loads `.env` itself. Cloudflare requests always use the fixed `https://api.cloudflare.com` account-scoped endpoint; manifests cannot override the endpoint or headers.
+
+Worker, hard-check, and internal Git subprocesses do not receive Cloudflare credentials. Timed-out commands are terminated as a process group. Candidate capture rejects active Git clean filters before content inspection. The artifact directory must be absent or empty, which prevents stale run data from mixing with a new run.
+
+A missing or unusable provider falls back to deterministic checks for low/medium risk and exits nonzero for high risk. Inspect `.shadow-runs/shadow-example-001/` for `run-record.json`, the candidate diff within the optional `candidate_paths` scope, compact `evidence-packets.json`, and redacted verifier response artifacts. The verifier can request `would_reinspect`, but Phase 1 never invokes repair and never mutates the candidate on its own.
+
+See [`QUICKSTART.md`](QUICKSTART.md) for provider setup and the first shadow-mode experiment.
 
 ## Repository map
 
@@ -137,7 +157,9 @@ See [`QUICKSTART.md`](QUICKSTART.md) for Cloudflare/OpenRouter setup and the fir
 - `docs/token-efficiency.md` - evidence-packet and quota-efficiency rules.
 - `docs/integration-path.md` - staged Hermes integration.
 - `configs/baseline.yaml` - V0.2 logical graph configuration.
-- `schemas/` - task, verifier, and run-record contracts.
+- `schemas/` - task, manifest, verifier, and run-record contracts.
+- `examples/` - runnable-shaped task, manifest, and evidence packet examples.
+- `scripts/shadow_orchestrator.py` - automatic Phase 1 shadow runner and CLI.
 - `experiments/ablation-matrix.md` - experiments needed before adding complexity.
 - `ROADMAP.md` - implementation/research milestones.
 

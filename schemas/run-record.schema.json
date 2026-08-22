@@ -1,11 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "run-record.schema.json",
-  "title": "RunRecord",
+  "title": "HermesGraph Phase 1 RunRecord",
   "type": "object",
   "required": [
-    "run_id", "task_id", "system_id", "initial_candidate_hash",
-    "initial_outcome", "final_candidate_hash", "final_outcome"
+    "run_id",
+    "task_id",
+    "system_id",
+    "initial_candidate_hash",
+    "initial_outcome",
+    "final_candidate_hash",
+    "final_outcome",
+    "risk_class",
+    "policy_action",
+    "status",
+    "provider_errors",
+    "hard_checks",
+    "verifier_results",
+    "evidence_packets"
   ],
   "properties": {
     "run_id": {"type": "string"},
@@ -16,12 +28,39 @@
     "final_candidate_hash": {"type": "string"},
     "initial_outcome": {"enum": ["pass", "fail", "unknown"]},
     "final_outcome": {"enum": ["pass", "fail", "unknown"]},
+    "risk_class": {"enum": ["low", "medium", "high"]},
+    "policy_action": {
+      "enum": [
+        "pending",
+        "accept_shadow",
+        "would_reinspect",
+        "accept_deterministic_fallback",
+        "manual_escalation",
+        "reject_dirty_baseline",
+        "worker_failed",
+        "worker_timeout",
+        "reject_hard_check",
+        "candidate_capture_failed",
+        "baseline_inspection_failed",
+        "evidence_cap_exceeded"
+      ]
+    },
+    "status": {"enum": ["starting", "completed", "failed"]},
+    "policy_reason": {"type": "string"},
+    "provider_errors": {"type": "array", "items": {"type": "string"}},
+    "provider_usage": {"type": "array"},
+    "worker": {"type": "object"},
+    "baseline": {"type": "object"},
+    "candidate": {"type": "object"},
+    "hard_checks": {"type": "array", "items": {"type": "object"}},
+    "evidence_packets": {"type": "array", "items": {"type": "object"}},
+    "verifier_results": {"type": "array", "items": {"type": "object"}},
+    "repair_invoked": {"const": false},
+    "error": {"type": "string"},
     "intervention_outcome": {"enum": ["HELPED", "HARMED", "WASTED", "MISSED", "NONE"]},
     "rollback_used": {"type": "boolean"},
     "luna_tokens": {"type": "integer", "minimum": 0},
-    "verifier_tokens": {"type": "integer", "minimum": 0},
-    "verifier_results": {"type": "array"},
-    "provider_errors": {"type": "array", "items": {"type": "string"}}
+    "verifier_tokens": {"type": "integer", "minimum": 0}
   },
   "additionalProperties": true
 }
