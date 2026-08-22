@@ -76,20 +76,20 @@ Stage 2 repair would fire and how large the instruction would be.
 
 ## Phase 2 - One safe repair loop
 
-Enable a single targeted Luna reinspection when calibrated policy allows it.
-
-Use Hermes native execution/delegation boundaries where useful, but preserve Luna as the worker/repair owner.
+Enable a single targeted repair when the manifest sets
+`stage2.allow_one_repair` and a `repair.command`. Default manifests do not
+repair.
 
 Repair flow:
 
 ```text
-Luna candidate
+candidate
  -> deterministic evidence
- -> free verifier flag
- -> Luna independently reinspects
- -> deterministic regression guard
+ -> verifier flag
+ -> one repair command
+ -> hard-check guard (rollback on fail)
  -> affected-criteria re-score
- -> accept or rollback
+ -> HELPED / HARMED / WASTED
 ```
 
 ## Phase 3 - Uncertainty escalation

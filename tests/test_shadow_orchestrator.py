@@ -1519,5 +1519,105 @@ class PolicyAndCliTests(unittest.TestCase):
                 self.assertEqual(main([str(manifest_path)]), 1)
 
 
+def _enable_stage2(manifest_path: Path, repair_command: list[str], hard_check_command: list[str] | None = None) -> None:
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data["stage2"] = {"allow_one_repair": True}
+    data["repair"] = {"command": repair_command, "timeout_seconds": 5}
+    data["candidate_paths"] = ["candidate.txt"]
+    if hard_check_command is not None:
+        data["hard_checks"] = [
+            {"id": "content-check", "command": hard_check_command, "timeout_seconds": 5}
+        ]
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+
+class Stage2Tests(unittest.TestCase):
+    def test_one_repair_can_help_without_a_second_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('good')"],
+            )
+
+            class FlipVerifier:
+                def __init__(self) -> None:
+                    self.calls = 0
+
+                def score(self, packet: dict) -> dict:
+                    self.calls += 1
+                    if self.calls == 1:
+                        return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+                    return {"verdict": "PASS", "normalized_score": 0.97, "entropy": 0.13, "margin": 0.94}
+
+            verifier = FlipVerifier()
+            result = run_manifest(manifest_path, verifier=verifier)
+
+            self.assertTrue(result.record["repair_invoked"])
+            self.assertEqual(result.record["intervention_outcome"], "HELPED")
+            self.assertFalse(result.record["rollback_used"])
+            self.assertEqual(result.policy_action, "accept_shadow")
+            self.assertEqual(verifier.calls, 2)
+            self.assertEqual((root / "repo" / "candidate.txt").read_text(encoding="utf-8"), "good")
+            self.assertNotEqual(result.record["initial_candidate_hash"], result.record["final_candidate_hash"])
+
+    def test_failed_hard_check_rolls_back_and_marks_harmed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            check = [
+                sys.executable,
+                "-c",
+                "from pathlib import Path; raise SystemExit(0 if Path('candidate.txt').read_text() != 'broken' else 1)",
+            ]
+            _enable_stage2(
+                manifest_path,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('broken')"],
+                hard_check_command=check,
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            result = run_manifest(manifest_path, verifier=FailingVerifier())
+
+            self.assertTrue(result.record["repair_invoked"])
+            self.assertTrue(result.record["rollback_used"])
+            self.assertEqual(result.record["intervention_outcome"], "HARMED")
+            self.assertEqual((root / "repo" / "candidate.txt").read_text(encoding="utf-8"), "bad")
+            self.assertEqual(result.policy_action, "would_reinspect")
+
+    def test_noop_repair_is_wasted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            result = run_manifest(manifest_path, verifier=FailingVerifier())
+
+            self.assertTrue(result.record["repair_invoked"])
+            self.assertEqual(result.record["intervention_outcome"], "WASTED")
+            self.assertFalse(result.record["rollback_used"])
+            self.assertEqual(result.policy_action, "would_reinspect")
+
+
 if __name__ == "__main__":
     unittest.main()
