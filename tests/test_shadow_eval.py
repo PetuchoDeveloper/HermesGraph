@@ -177,12 +177,14 @@ class CaseRunnerTests(unittest.TestCase):
                 Path(temp_dir) / "artifacts",
                 verifier=ScriptedVerifier("FAIL"),
             )
+            self.assertTrue((Path(result["artifact_dir"]) / "reinspect-instruction.md").is_file())
 
         self.assertEqual(result["actual_policy"], "would_reinspect")
         self.assertTrue(result["verifier_called"])
         self.assertEqual(result["verdict"], "FAIL")
         self.assertEqual(result["initial_hash"], result["final_hash"])
         self.assertFalse(result["repair_invoked"])
+        self.assertTrue(result["instruction_written"])
 
     def test_injection_case_records_fail_without_repair_or_live_credentials(self) -> None:
         suite_path = Path(__file__).parents[1] / "evals" / "shadow-v0" / "suite.json"
@@ -269,6 +271,8 @@ class CaseRunnerTests(unittest.TestCase):
             self.assertEqual(report["total"], 34)
             self.assertFalse(report["repair_invoked_any"])
             self.assertFalse(report["hashes_changed_any"])
+            self.assertEqual(report["intervention_count"], 19)
+            self.assertGreater(report["instruction_bytes_total"], 0)
             self.assertEqual(report["hard_fail_short_circuits"], 8)
             self.assertEqual(report["confusion"]["tp"], 19)
             self.assertEqual(report["confusion"]["tn"], 7)

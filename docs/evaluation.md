@@ -51,6 +51,10 @@ slugify-fitted 0.90 / 0.40 gate.
 
 Generate the repair instruction Luna *would* have received but do not mutate the official candidate. Measure expected intervention frequency and cost.
 
+The Phase 1 runner writes `reinspect-instruction.md` when policy is
+`would_reinspect`. `repair_invoked` stays false. Offline suite reports
+`intervention_count` and estimated instruction tokens.
+
 ### Stage 2 - Controlled repair
 
 Allow one targeted Luna repair. Preserve both initial and repaired candidates so objective outcome can classify HELPED/HARMED/WASTED/MISSED.

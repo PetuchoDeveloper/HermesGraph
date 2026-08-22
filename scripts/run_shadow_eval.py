@@ -265,6 +265,9 @@ def run_case(
         "margin": first_verifier.get("margin") if isinstance(first_verifier, dict) else None,
         "verifier_tokens": _verifier_tokens(first_verifier if isinstance(first_verifier, dict) else None),
         "repair_invoked": bool(result.record.get("repair_invoked", False)),
+        "instruction_written": bool((result.record.get("stage1") or {}).get("instruction_written")),
+        "instruction_bytes": int((result.record.get("stage1") or {}).get("instruction_bytes") or 0),
+        "instruction_tokens_est": int((result.record.get("stage1") or {}).get("instruction_tokens_est") or 0),
         "initial_hash": result.record.get("initial_candidate_hash", ""),
         "final_hash": result.record.get("final_candidate_hash", ""),
         "exit_code": result.exit_code,
@@ -287,9 +290,16 @@ def build_report(suite: Mapping[str, Any], summaries: list[dict[str, Any]]) -> d
     hard_fail_short_circuits = 0
     hashes_changed = 0
     repair_invoked = 0
+    interventions = 0
+    instruction_bytes = 0
+    instruction_tokens = 0
     for summary in summaries:
         if summary.get("repair_invoked"):
             repair_invoked += 1
+        if summary.get("instruction_written"):
+            interventions += 1
+            instruction_bytes += int(summary.get("instruction_bytes") or 0)
+            instruction_tokens += int(summary.get("instruction_tokens_est") or 0)
         if (
             summary.get("initial_hash")
             and summary.get("final_hash")
@@ -323,6 +333,10 @@ def build_report(suite: Mapping[str, Any], summaries: list[dict[str, Any]]) -> d
         "hard_fail_short_circuits": hard_fail_short_circuits,
         "repair_invoked_any": repair_invoked > 0,
         "hashes_changed_any": hashes_changed > 0,
+        "intervention_count": interventions,
+        "intervention_rate": (interventions / len(summaries)) if summaries else 0.0,
+        "instruction_bytes_total": instruction_bytes,
+        "instruction_tokens_est_total": instruction_tokens,
     }
 
 

@@ -1278,6 +1278,36 @@ class PolicyAndCliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0)
             self.assertEqual(result.policy_action, "would_reinspect")
             self.assertEqual(result.record["final_outcome"], "fail")
+            self.assertFalse(result.record["repair_invoked"])
+            instruction = root / "artifacts" / "reinspect-instruction.md"
+            self.assertTrue(instruction.is_file())
+            text = instruction.read_text(encoding="utf-8")
+            self.assertIn("Do not apply", text)
+            self.assertIn("semantic-1", text)
+            self.assertFalse(result.record.get("stage1", {}).get("applied", True))
+            self.assertGreater(result.record["stage1"]["instruction_bytes"], 0)
+            self.assertEqual(
+                result.record["initial_candidate_hash"],
+                result.record["final_candidate_hash"],
+            )
+
+    def test_accept_shadow_does_not_write_reinspect_instruction(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('candidate')"],
+            )
+
+            class PassingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "PASS", "normalized_score": 0.97, "entropy": 0.13, "margin": 0.94}
+
+            result = run_manifest(manifest_path, verifier=PassingVerifier())
+
+            self.assertEqual(result.policy_action, "accept_shadow")
+            self.assertFalse((root / "artifacts" / "reinspect-instruction.md").exists())
+            self.assertFalse(result.record.get("stage1", {}).get("instruction_written", False))
 
     def test_low_score_pass_requests_reinspection_without_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
