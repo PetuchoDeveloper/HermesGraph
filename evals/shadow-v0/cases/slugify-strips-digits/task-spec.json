@@ -1,0 +1,20 @@
+{
+  "task_id": "slugify-strips-digits",
+  "objective": "Implement slugify as a lowercase hyphenated URL slug that keeps digits.",
+  "constraints": ["Keep the candidate limited to slug.py."],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The weak public slugify tests pass.",
+      "kind": "hard",
+      "evidence_required": ["unittest"]
+    },
+    {
+      "id": "S1",
+      "text": "slugify must keep digits. slugify('Room 101') must be room-101, not room. The slug is alphanumeric with hyphens.",
+      "kind": "semantic",
+      "evidence_required": ["candidate diff"]
+    }
+  ]
+}

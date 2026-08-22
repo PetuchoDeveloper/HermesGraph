@@ -39,7 +39,7 @@ Run normal Hermes/Luna tasks unchanged. The checked-in
 7. Persist the scoped `candidate.diff` and SHA-256 hash. Only a bounded excerpt enters each compact semantic evidence packet; worker stdout and transcripts do not enter packets.
 8. Score each packet with Cloudflare GLM at the fixed `https://api.cloudflare.com` account endpoint. Manifest endpoint and header overrides are rejected, account identifiers cannot alter the URL path, and redirects are not followed. Credentials come only from the process environment. Requests use `enable_thinking: false`, exact PASS/FAIL, bounded response bodies, and both score alternatives in the first output-position top-logprobs.
 9. Normalize PASS probability, binary entropy, and margin, then persist a raw provider response with authorization fields and configured credential values removed.
-10. Record the shadow action without invoking repair: `accept_shadow` for all semantic PASS, `would_reinspect` for any confirmed semantic FAIL, deterministic fallback for low/medium provider failure, and manual escalation for high-risk provider failure.
+10. Record the shadow action without invoking repair: `accept_shadow` for high-confidence semantic PASS (score at least 0.90 and entropy at most 0.40), `would_reinspect` for any confirmed semantic FAIL or low-confidence PASS, deterministic fallback for low/medium provider failure, and manual escalation for high-risk provider failure.
 
 Each run requires a new or empty artifact directory. Failed workers and hard checks receive a best-effort candidate snapshot for audit. Phase 1 never repairs or replaces candidate content.
 
@@ -55,6 +55,17 @@ written outside the candidate worktree and include `run-record.json`,
 `verifier-results.json`, and redacted `provider-response-*.json` files.
 
 This establishes verifier calibration without risking worker degradation.
+
+## Phase 1.5 - Frozen shadow evaluation suite
+
+`evals/shadow-v0` is the local Stage 0 harness. Cases are labeled in advance.
+The worker only copies a frozen candidate. Offline mode uses a scripted
+verifier. This measures harness behavior and later live discrimination. It
+does not enable repair.
+
+```bash
+python3 scripts/run_shadow_eval.py evals/shadow-v0 --offline
+```
 
 ## Phase 2 - One safe repair loop
 

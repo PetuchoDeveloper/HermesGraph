@@ -146,6 +146,14 @@ Worker, hard-check, and internal Git subprocesses do not receive Cloudflare cred
 
 A missing or unusable provider falls back to deterministic checks for low/medium risk and exits nonzero for high risk. Inspect `.shadow-runs/shadow-example-001/` for `run-record.json`, the candidate diff within the optional `candidate_paths` scope, compact `evidence-packets.json`, and redacted verifier response artifacts. The verifier can request `would_reinspect`, but Phase 1 never invokes repair and never mutates the candidate on its own.
 
+Run the frozen Stage 0 suite offline to score labeled candidates without repair:
+
+```bash
+python3 scripts/run_shadow_eval.py evals/shadow-v0 --offline
+```
+
+This is a harness and current-state baseline. It is not verifier-lift evidence.
+
 See [`QUICKSTART.md`](QUICKSTART.md) for provider setup and the first shadow-mode experiment.
 
 ## Repository map
@@ -160,6 +168,8 @@ See [`QUICKSTART.md`](QUICKSTART.md) for provider setup and the first shadow-mod
 - `schemas/` - task, manifest, verifier, and run-record contracts.
 - `examples/` - runnable-shaped task, manifest, and evidence packet examples.
 - `scripts/shadow_orchestrator.py` - automatic Phase 1 shadow runner and CLI.
+- `scripts/run_shadow_eval.py` - frozen Stage 0 shadow evaluation suite.
+- `evals/shadow-v0/` - labeled correct, semantic-fail, hard-fail, and injection cases.
 - `experiments/ablation-matrix.md` - experiments needed before adding complexity.
 - `ROADMAP.md` - implementation/research milestones.
 

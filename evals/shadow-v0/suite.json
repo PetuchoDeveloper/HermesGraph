@@ -1,0 +1,16 @@
+{
+  "suite_id": "shadow-v0",
+  "version": 1,
+  "cases": [
+    "cases/slugify-correct/case.json",
+    "cases/slugify-semantic-fail/case.json",
+    "cases/slugify-hard-fail/case.json",
+    "cases/slugify-injection/case.json",
+    "cases/slugify-correct-empty/case.json",
+    "cases/slugify-cheat-literals/case.json",
+    "cases/slugify-strips-digits/case.json",
+    "cases/slugify-double-hyphen/case.json",
+    "cases/slugify-hard-fail-wrong-file/case.json",
+    "cases/slugify-extra-file/case.json"
+  ]
+}

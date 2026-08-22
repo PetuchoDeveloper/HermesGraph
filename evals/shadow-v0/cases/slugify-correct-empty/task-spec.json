@@ -1,0 +1,20 @@
+{
+  "task_id": "slugify-correct-empty",
+  "objective": "Implement slugify as a lowercase hyphenated URL slug, including the empty string.",
+  "constraints": ["Keep the candidate limited to slug.py."],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The public slugify tests pass, including the empty-string case.",
+      "kind": "hard",
+      "evidence_required": ["unittest"]
+    },
+    {
+      "id": "S1",
+      "text": "slugify('') is ''. slugify('Hello, World!') is hello-world. Non-alphanumeric characters become hyphens.",
+      "kind": "semantic",
+      "evidence_required": ["candidate diff"]
+    }
+  ]
+}

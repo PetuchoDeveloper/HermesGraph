@@ -1,0 +1,8 @@
+{
+  "id": "slugify-correct",
+  "family": "slugify",
+  "ground_truth": "good",
+  "expected_policy": "accept_shadow",
+  "verifier_should_run": true,
+  "fake_verdict": "PASS"
+}

@@ -89,7 +89,17 @@ The manifest contract is documented in
 [`schemas/shadow-manifest.schema.json`](schemas/shadow-manifest.schema.json),
 and the example is [`examples/shadow-manifest.example.json`](examples/shadow-manifest.example.json).
 
-## 5. Read the graph rules before enabling intervention
+## 5. Run the frozen Stage 0 evaluation suite
+
+```bash
+python3 scripts/run_shadow_eval.py evals/shadow-v0 --offline
+```
+
+The suite scores four labeled slugify cases with a scripted verifier. It does
+not call Cloudflare and does not repair candidates. A zero exit means the
+harness matched every expected policy. See [`evals/shadow-v0/README.md`](evals/shadow-v0/README.md).
+
+## 6. Read the graph rules before enabling intervention
 
 Start with:
 

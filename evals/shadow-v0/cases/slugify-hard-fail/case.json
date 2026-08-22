@@ -1,0 +1,8 @@
+{
+  "id": "slugify-hard-fail",
+  "family": "slugify",
+  "ground_truth": "hard_fail",
+  "expected_policy": "reject_hard_check",
+  "verifier_should_run": false,
+  "fake_verdict": "PASS"
+}
