@@ -66,7 +66,8 @@ The command uses a scripted fake verifier. It writes `evals/shadow-v0/last-repor
 Exit code 0 means every case matched its expected policy. No repair path exists.
 
 Live Cloudflare scoring still does not repair. A PASS below score 0.90 or above
-entropy 0.40 is recorded as `would_reinspect`.
+entropy 0.40 is recorded as `would_reinspect`. That action now also writes
+`reinspect-instruction.md`. The candidate still does not change.
 
 Live Cloudflare scoring is a later supervisor step. Do not treat an offline
 match as model calibration.

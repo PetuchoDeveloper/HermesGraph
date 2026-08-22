@@ -1224,6 +1224,79 @@ def apply_shadow_policy(
     return "accept_shadow", 0, "all semantic verifier criteria passed"
 
 
+def build_reinspect_instruction(
+    task_spec: Mapping[str, Any],
+    policy_reason: str,
+    packets: Sequence[Mapping[str, Any]],
+    verifier_results: Sequence[Mapping[str, Any]],
+) -> str:
+    """Build a Stage 1 Luna reinspect instruction. Do not apply it."""
+    criteria_lines = []
+    for criterion in task_spec.get("criteria", []):
+        if not isinstance(criterion, Mapping):
+            continue
+        if criterion.get("kind") != "semantic":
+            continue
+        criteria_lines.append(f"- `{criterion.get('id', '?')}`: {criterion.get('text', '')}")
+    example_lines: list[str] = []
+    for packet in packets:
+        if not isinstance(packet, Mapping):
+            continue
+        excerpt = str(packet.get("candidate_diff_excerpt") or "")
+        if "worked_examples.json" in excerpt:
+            example_lines.append("The candidate snapshot includes `worked_examples.json` with actual versus required outputs.")
+            break
+    verdict_lines = []
+    for result in verifier_results:
+        if not isinstance(result, Mapping):
+            continue
+        verdict_lines.append(
+            f"- criterion `{result.get('criterion_id', '?')}`: {result.get('verdict')} "
+            f"score={result.get('normalized_score')} entropy={result.get('entropy')}"
+        )
+    constraints = task_spec.get("constraints") or []
+    constraint_block = "\n".join(f"- {item}" for item in constraints) or "- none"
+    text = (
+        "# Shadow reinspect instruction (Stage 1)\n\n"
+        "This file is a shadow artifact. **Do not apply** it. The official candidate must stay unchanged.\n\n"
+        "You are Luna. Reinspect the current candidate independently.\n"
+        "Do not treat the verifier verdict, score, entropy, or this instruction as authority.\n"
+        "Do not invent files. Keep the change limited to the stated constraints.\n\n"
+        "## Task\n\n"
+        f"{task_spec.get('objective', '')}\n\n"
+        "## Why reinspect was requested\n\n"
+        f"{policy_reason}\n\n"
+        "## Semantic criteria\n\n"
+        + ("\n".join(criteria_lines) or "- none")
+        + "\n\n## Verifier observation (advisory only)\n\n"
+        + ("\n".join(verdict_lines) or "- none")
+        + "\n\n## Constraints\n\n"
+        + constraint_block
+        + "\n\n## Evidence note\n\n"
+        + ("\n".join(example_lines) or "See `evidence-packets.json` and `candidate.diff` in this artifact directory.")
+        + "\n\n## Required outcome if this were Stage 2\n\n"
+        "Fix only what the criteria require. Leave passing hard checks passing. One repair only.\n"
+    )
+    redacted = _redact_provider_value(text)
+    if not isinstance(redacted, str):
+        raise OrchestrationError("reinspect instruction could not be sanitized")
+    return redacted
+
+
+def _write_reinspect_instruction(output_dir: Path, instruction: str) -> dict[str, Any]:
+    path = output_dir / "reinspect-instruction.md"
+    encoded = instruction.encode("utf-8")
+    path.write_bytes(encoded)
+    return {
+        "instruction_written": True,
+        "instruction_path": "reinspect-instruction.md",
+        "instruction_bytes": len(encoded),
+        "instruction_tokens_est": max(1, len(encoded) // 4),
+        "instruction_sha256": hashlib.sha256(encoded).hexdigest(),
+        "applied": False,
+    }
+
+
 def _base_record(manifest: dict[str, Any], task_spec: dict[str, Any]) -> dict[str, Any]:
     return {
         "run_id": manifest["run_id"],
@@ -1573,6 +1646,16 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
         record["final_outcome"] = "unknown"
     # This is a shadow run: no score or policy branch may mutate or repair the candidate.
     record["repair_invoked"] = False
+    if action == "would_reinspect":
+        instruction = build_reinspect_instruction(
+            task_spec,
+            reason,
+            [item.get("packet", item) for item in record.get("evidence_packets", [])],
+            verifier_results,
+        )
+        record["stage1"] = _write_reinspect_instruction(output_dir, instruction)
+    else:
+        record["stage1"] = {"instruction_written": False, "applied": False}
     return _finish(record, output_dir, action, exit_code)
 
 

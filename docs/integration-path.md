@@ -67,6 +67,13 @@ does not enable repair.
 python3 scripts/run_shadow_eval.py evals/shadow-v0 --offline
 ```
 
+## Phase 1.6 - Shadow intervention instruction
+
+When policy is `would_reinspect`, the runner writes
+`reinspect-instruction.md` in the artifact directory. The candidate is not
+changed. `repair_invoked` stays false. This measures how often a later
+Stage 2 repair would fire and how large the instruction would be.
+
 ## Phase 2 - One safe repair loop
 
 Enable a single targeted Luna reinspection when calibrated policy allows it.
