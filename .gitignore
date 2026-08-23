@@ -8,3 +8,4 @@ __pycache__/
 results/
 traces/
 *.log
+.hermes/

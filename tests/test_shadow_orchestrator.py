@@ -1519,10 +1519,18 @@ class PolicyAndCliTests(unittest.TestCase):
                 self.assertEqual(main([str(manifest_path)]), 1)
 
 
-def _enable_stage2(manifest_path: Path, repair_command: list[str], hard_check_command: list[str] | None = None) -> None:
+def _enable_stage2(
+    manifest_path: Path,
+    repair_command: list[str],
+    hard_check_command: list[str] | None = None,
+    inherit_provider_env: bool = False,
+) -> None:
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     data["stage2"] = {"allow_one_repair": True}
-    data["repair"] = {"command": repair_command, "timeout_seconds": 5}
+    repair: dict[str, object] = {"command": repair_command, "timeout_seconds": 5}
+    if inherit_provider_env:
+        repair["inherit_provider_env"] = True
+    data["repair"] = repair
     data["candidate_paths"] = ["candidate.txt"]
     if hard_check_command is not None:
         data["hard_checks"] = [
@@ -1615,8 +1623,190 @@ class Stage2Tests(unittest.TestCase):
 
             self.assertTrue(result.record["repair_invoked"])
             self.assertEqual(result.record["intervention_outcome"], "WASTED")
-            self.assertFalse(result.record["rollback_used"])
+            # Grok review fix: a still-wrong mutation must not persist.
+            # (Noop writes identical bytes, so the hash matches and no restore fires.)
+            self.assertFalse((root / "repo" / "candidate.txt").read_text() == "good")
             self.assertEqual(result.policy_action, "would_reinspect")
+
+    def test_repair_created_file_is_removed_on_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path;"
+                    " Path('candidate.txt').write_text('broken');"
+                    " Path('extra.txt').write_text('new file')",
+                ],
+                hard_check_command=[
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path;"
+                    " raise SystemExit(0 if Path('candidate.txt').read_text() == 'bad' else 1)",
+                ],
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            result = run_manifest(manifest_path, verifier=FailingVerifier())
+
+            self.assertTrue(result.record["rollback_used"])
+            self.assertFalse((root / "repo" / "extra.txt").exists())
+            self.assertEqual((root / "repo" / "candidate.txt").read_text(), "bad")
+
+    def test_instruction_is_written_before_repair_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path;"
+                    " instruction = Path('reinspect-instruction.md');"
+                    " Path('saw-instruction').write_text(str(instruction.exists()))",
+                ],
+                hard_check_command=[
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path;"
+                    " p = Path('saw-instruction');"
+                    " raise SystemExit(0 if not p.exists() or p.read_text() == 'True' else 1)",
+                ],
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            result = run_manifest(manifest_path, verifier=FailingVerifier())
+
+            self.assertEqual(result.record["stage1"]["instruction_written"], True)
+            self.assertEqual(result.policy_action, "would_reinspect")
+
+    def test_repair_without_opt_in_does_not_see_provider_env(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [
+                    sys.executable,
+                    "-c",
+                    "import os, pathlib;"
+                    " seen = 'yes' if os.environ.get('CLOUDFLARE_API_TOKEN') else 'no';"
+                    " pathlib.Path('env-seen.txt').write_text(seen)",
+                ],
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            original = dict(os.environ)
+            os.environ["CLOUDFLARE_API_TOKEN"] = "not-a-real-token"
+            try:
+                result = run_manifest(manifest_path, verifier=FailingVerifier())
+            finally:
+                os.environ.clear()
+                os.environ.update(original)
+
+            self.assertEqual((root / "repo" / "env-seen.txt").read_text(), "no")
+
+    def test_repair_with_inherit_provider_env_sees_provider_vars(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [
+                    sys.executable,
+                    "-c",
+                    "import os, pathlib;"
+                    " seen = 'yes' if os.environ.get('CLOUDFLARE_API_TOKEN') else 'no';"
+                    " pathlib.Path('env-seen.txt').write_text(seen)",
+                ],
+                inherit_provider_env=True,
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            original = dict(os.environ)
+            os.environ["CLOUDFLARE_API_TOKEN"] = "not-a-real-token"
+            try:
+                result = run_manifest(manifest_path, verifier=FailingVerifier())
+            finally:
+                os.environ.clear()
+                os.environ.update(original)
+
+            self.assertEqual((root / "repo" / "env-seen.txt").read_text(), "yes")
+
+    def test_phase4_skips_repair_on_low_confidence_pass_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+            )
+            _enable_stage2(
+                manifest_path,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('good')"],
+            )
+
+            class LowConfidenceVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "PASS", "normalized_score": 0.85, "entropy": 0.35, "margin": 0.4}
+
+            result = run_manifest(manifest_path, verifier=LowConfidenceVerifier())
+
+            self.assertFalse(result.record["repair_invoked"])
+            self.assertEqual(result.record["intervention_outcome"], "NONE")
+            self.assertEqual(result.record["stage1"]["instruction_written"], True)
+            self.assertEqual(result.policy_action, "would_reinspect")
+            self.assertIn("no_fail_verdict", str(result.record.get("policy_reason", "")) + result.record.get("stage2_decision", ""))
+
+    def test_phase4_high_risk_never_auto_repairs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = make_clean_run(
+                root,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('bad')"],
+                risk_class="high",
+            )
+            _enable_stage2(
+                manifest_path,
+                [sys.executable, "-c", "from pathlib import Path; Path('candidate.txt').write_text('good')"],
+            )
+
+            class FailingVerifier:
+                def score(self, packet: dict) -> dict:
+                    return {"verdict": "FAIL", "normalized_score": 0.2, "entropy": 0.5, "margin": 0.6}
+
+            result = run_manifest(manifest_path, verifier=FailingVerifier())
+
+            self.assertFalse(result.record["repair_invoked"])
+            self.assertEqual(result.record["intervention_outcome"], "NONE")
+            self.assertTrue(result.record["stage1"]["instruction_written"])
 
 
 if __name__ == "__main__":

@@ -90,7 +90,7 @@ _ALLOWED_MANIFEST_KEYS = {
     "repair",
 }
 _ALLOWED_STAGE2_KEYS = {"allow_one_repair"}
-_ALLOWED_COMMAND_KEYS = {"command", "timeout_seconds"}
+_ALLOWED_COMMAND_KEYS = {"command", "timeout_seconds", "inherit_provider_env"}
 _ALLOWED_CHECK_KEYS = {"id", "command", "timeout_seconds"}
 _ALLOWED_CAP_KEYS = {"evidence_bytes", "output_bytes"}
 _ALLOWED_PROVIDER_KEYS = {
@@ -486,14 +486,21 @@ def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
         process.wait()
 
 
-def _run_command(command: list[str], cwd: Path, timeout: int, output_cap: int) -> dict[str, Any]:
+def _run_command(
+    command: list[str],
+    cwd: Path,
+    timeout: int,
+    output_cap: int,
+    inherit_provider_env: bool = False,
+) -> dict[str, Any]:
+    command_environment = dict(os.environ) if inherit_provider_env else _subprocess_environment()
     with tempfile.TemporaryFile(mode="w+b") as stdout_file, tempfile.TemporaryFile(mode="w+b") as stderr_file:
         process: subprocess.Popen[Any] | None = None
         try:
             process = subprocess.Popen(
                 command,
                 cwd=str(cwd),
-                env=_subprocess_environment(),
+                env=command_environment,
                 shell=False,
                 stdout=stdout_file,
                 stderr=stderr_file,
@@ -1249,6 +1256,18 @@ def apply_shadow_policy(
     return "accept_shadow", 0, "all semantic verifier criteria passed"
 
 
+def should_attempt_repair(task_spec: Mapping[str, Any], verdicts: Sequence[str]) -> bool:
+    """Phase 4 gate: repair only explicit verifier FAIL on low/medium risk.
+
+    Live-004 evidence: both false-positive flags were low-confidence PASS;
+    the true positive was an explicit FAIL. High risk always escalates to
+    a human instead of auto-repair.
+    """
+    if str(task_spec.get("risk_class", "low")) == "high":
+        return False
+    return any(str(verdict).upper() == "FAIL" for verdict in verdicts)
+
+
 def build_reinspect_instruction(
     task_spec: Mapping[str, Any],
     policy_reason: str,
@@ -1331,6 +1350,15 @@ def _snapshot_worktree_files(worktree: Path, relative_paths: Sequence[str]) -> d
         else:
             snapshot[relative] = None
     return snapshot
+
+
+def _scan_worktree_files(worktree: Path) -> set[str]:
+    """Every regular file in the worktree, as repo-relative paths."""
+    found: set[str] = set()
+    for path in worktree.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            found.add(path.relative_to(worktree).as_posix())
+    return found
 
 
 def _restore_worktree_files(worktree: Path, snapshot: Mapping[str, bytes | None]) -> None:
@@ -1740,23 +1768,51 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
     record["repair_invoked"] = False
     record["rollback_used"] = False
     record["intervention_outcome"] = "NONE"
+    record["stage2_decision"] = ""
 
     stage2_enabled = bool(manifest.get("stage2", {}).get("allow_one_repair")) and manifest.get("repair")
+    if action == "would_reinspect" and stage2_enabled and not should_attempt_repair(task_spec, verdicts):
+        record["stage2_decision"] = (
+            "skipped: no_fail_verdict (Phase 4 repairs only explicit verifier FAIL on low/medium risk)"
+        )
+        stage2_enabled = False
+
+    if action == "would_reinspect":
+        instruction = build_reinspect_instruction(
+            task_spec,
+            reason,
+            [item.get("packet", item) for item in record.get("evidence_packets", [])],
+            verifier_results,
+        )
+        record["stage1"] = _write_reinspect_instruction(output_dir, instruction)
+    else:
+        record["stage1"] = {"instruction_written": False, "applied": False}
+
     if action == "would_reinspect" and stage2_enabled:
         snapshot_paths = list(candidate_paths) or ["candidate.txt"]
         pre_repair = _snapshot_worktree_files(worktree, snapshot_paths)
         pre_hash = record.get("final_candidate_hash") or record.get("initial_candidate_hash")
         repair_spec = manifest["repair"]
+        pre_existing = _scan_worktree_files(worktree)
         repair_result = _run_command(
             repair_spec["command"],
             worktree,
             repair_spec["timeout_seconds"],
             output_cap,
+            inherit_provider_env=bool(repair_spec.get("inherit_provider_env", False)),
         )
         record["repair"] = repair_result
         record["repair_invoked"] = True
-        if repair_result["timed_out"] or repair_result["returncode"] != 0:
+
+        def _rollback() -> None:
             _restore_worktree_files(worktree, pre_repair)
+            for created in _scan_worktree_files(worktree) - pre_existing:
+                extra = worktree / created
+                if extra.is_file() and not extra.is_symlink():
+                    extra.unlink()
+
+        if repair_result["timed_out"] or repair_result["returncode"] != 0:
+            _rollback()
             record["rollback_used"] = True
             record["intervention_outcome"] = "HARMED"
         else:
@@ -1777,7 +1833,7 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
                     checks_ok = False
             record["post_repair_hard_checks"] = post_checks
             if not checks_ok:
-                _restore_worktree_files(worktree, pre_repair)
+                _rollback()
                 record["rollback_used"] = True
                 record["intervention_outcome"] = "HARMED"
             else:
@@ -1820,6 +1876,9 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
                     if action == "accept_shadow":
                         record["intervention_outcome"] = "HELPED"
                     else:
+                        _rollback()
+                        record["final_candidate_hash"] = pre_hash
+                        record["rollback_used"] = True
                         record["intervention_outcome"] = "WASTED"
 
     if action == "would_reinspect":
@@ -1828,16 +1887,6 @@ def run_manifest(manifest_path: str | os.PathLike[str], verifier: object | None 
         record["final_outcome"] = "pass"
     else:
         record["final_outcome"] = "unknown"
-    if action == "would_reinspect":
-        instruction = build_reinspect_instruction(
-            task_spec,
-            reason,
-            [item.get("packet", item) for item in record.get("evidence_packets", [])],
-            verifier_results,
-        )
-        record["stage1"] = _write_reinspect_instruction(output_dir, instruction)
-    else:
-        record["stage1"] = {"instruction_written": False, "applied": False}
     return _finish(record, output_dir, action, exit_code)
 
 

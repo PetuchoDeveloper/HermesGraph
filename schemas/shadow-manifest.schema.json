@@ -68,7 +68,14 @@
       },
       "additionalProperties": false
     },
-    "repair": {"$ref": "#/$defs/commandSpec"}
+    "repair": {
+      "allOf": [{"$ref": "#/$defs/commandSpec"}],
+      "properties": {
+        "command": {"$ref": "#/$defs/argv"},
+        "timeout_seconds": {"$ref": "#/$defs/timeCap"},
+        "inherit_provider_env": {"type": "boolean"}
+      }
+    }
   },
   "$defs": {
     "argv": {
