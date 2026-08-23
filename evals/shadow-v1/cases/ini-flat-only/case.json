@@ -1,0 +1,8 @@
+{
+  "id": "ini-flat-only",
+  "family": "ini",
+  "ground_truth": "hard_fail",
+  "expected_policy": "reject_hard_check",
+  "verifier_should_run": true,
+  "fake_verdict": "PASS"
+}

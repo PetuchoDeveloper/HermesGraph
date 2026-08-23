@@ -1,0 +1,26 @@
+{
+  "task_id": "ini-hard-fail",
+  "objective": "Implement parse_ini, which parses a flat INI document into a nested dictionary.",
+  "constraints": [
+    "Keep the candidate limited to ini_parse.py."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The weak public parse_ini tests pass.",
+      "kind": "hard",
+      "evidence_required": [
+        "unittest"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "Sections map to top-level keys, keys inside sections nest under them, and dotted keys nest one level deeper than their section.",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}

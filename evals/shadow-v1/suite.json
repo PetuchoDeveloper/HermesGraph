@@ -1,0 +1,18 @@
+{
+  "suite_id": "shadow-v1",
+  "version": 1,
+  "cases": [
+    "cases/cart-correct/case.json",
+    "cases/cart-floor-discount/case.json",
+    "cases/cart-hard-fail/case.json",
+    "cases/cart-no-clamp/case.json",
+    "cases/ini-correct/case.json",
+    "cases/ini-flat-only/case.json",
+    "cases/ini-hard-fail/case.json",
+    "cases/ini-no-nesting/case.json",
+    "cases/money-correct/case.json",
+    "cases/money-floats/case.json",
+    "cases/money-hard-fail/case.json",
+    "cases/money-truncates/case.json"
+  ]
+}

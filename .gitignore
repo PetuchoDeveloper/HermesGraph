@@ -9,3 +9,5 @@ results/
 traces/
 *.log
 .hermes/
+evals/*/runs/
+evals/*/last-report.json

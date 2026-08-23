@@ -1,0 +1,26 @@
+{
+  "task_id": "cart-floor-discount",
+  "objective": "Implement a Cart class: add(item, price_cents, qty=1) accumulates per-item quantity clamped at most 9; apply_discount(percent) lowers every unit price by percent rounded half-up to the cent; total() sums price*quantity.",
+  "constraints": [
+    "Keep the candidate limited to cart.py."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The weak public Cart tests pass.",
+      "kind": "hard",
+      "evidence_required": [
+        "unittest"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "Quantity never exceeds 9 per item no matter how many times or how large an add() requests, and discount rounding is half-up (a 199-cent item at 50% becomes exactly 100).",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}

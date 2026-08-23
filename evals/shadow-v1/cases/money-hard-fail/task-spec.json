@@ -1,0 +1,27 @@
+{
+  "task_id": "money-hard-fail",
+  "objective": "Implement split_tip, which splits an integer-cent bill with a tip evenly across N people and distributes leftover cents one apiece to the earliest payers.",
+  "constraints": [
+    "Keep the candidate limited to money.py.",
+    "All arithmetic stays in integers."
+  ],
+  "risk_class": "low",
+  "criteria": [
+    {
+      "id": "H1",
+      "text": "The weak public split_tip tests pass.",
+      "kind": "hard",
+      "evidence_required": [
+        "unittest"
+      ]
+    },
+    {
+      "id": "S1",
+      "text": "Parts sum exactly to bill*tip total with no cent lost or created; remainders go to the earliest payers; no floating point is used.",
+      "kind": "semantic",
+      "evidence_required": [
+        "candidate diff"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "module": "ini_parse",
+  "function": "parse_ini",
+  "examples": [
+    {
+      "args": [
+        "[db]\nhost=h\ndb.port=5432\n"
+      ],
+      "required": {
+        "": {},
+        "db": {
+          "host": "h",
+          "db": {
+            "port": "5432"
+          }
+        }
+      }
+    },
+    {
+      "args": [
+        "top=1\n[net]\nretry.max=3\n"
+      ],
+      "required": {
+        "": {
+          "top": "1"
+        },
+        "net": {
+          "retry": {
+            "max": "3"
+          }
+        }
+      }
+    }
+  ]
+}
