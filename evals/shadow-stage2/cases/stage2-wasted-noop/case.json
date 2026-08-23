@@ -1,0 +1,11 @@
+{
+  "id": "stage2-wasted-noop",
+  "family": "stage2-slugify",
+  "ground_truth": "semantic_fail",
+  "expected_policy": "would_reinspect",
+  "expected_intervention": "WASTED",
+  "verifier_should_run": true,
+  "fake_verdicts": [
+    "FAIL"
+  ]
+}

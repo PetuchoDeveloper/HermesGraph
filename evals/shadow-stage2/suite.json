@@ -1,0 +1,11 @@
+{
+  "suite_id": "shadow-stage2",
+  "version": 1,
+  "cases": [
+    "cases/stage2-helped/case.json",
+    "cases/stage2-harmed/case.json",
+    "cases/stage2-wasted-noop/case.json",
+    "cases/stage2-wasted-still-wrong/case.json",
+    "cases/stage2-skip-good/case.json"
+  ]
+}
