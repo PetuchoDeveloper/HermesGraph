@@ -1,0 +1,11 @@
+{
+  "id": "stage2-skip-good",
+  "family": "stage2-slugify",
+  "ground_truth": "good",
+  "expected_policy": "accept_shadow",
+  "expected_intervention": "NONE",
+  "verifier_should_run": true,
+  "fake_verdicts": [
+    "PASS"
+  ]
+}

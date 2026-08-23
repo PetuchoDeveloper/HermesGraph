@@ -1,0 +1,11 @@
+{
+  "id": "stage2-harmed",
+  "family": "stage2-slugify",
+  "ground_truth": "semantic_fail",
+  "expected_policy": "would_reinspect",
+  "expected_intervention": "HARMED",
+  "verifier_should_run": true,
+  "fake_verdicts": [
+    "FAIL"
+  ]
+}

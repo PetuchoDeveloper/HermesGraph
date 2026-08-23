@@ -63,6 +63,9 @@ hard checks fail, restore those files and label HARMED. If the rescore
 becomes `accept_shadow`, label HELPED. If the candidate is unchanged or
 still `would_reinspect`, label WASTED. Never loop.
 
+`python3 scripts/run_shadow_eval.py evals/shadow-stage2 --offline` scores the
+frozen one-repair pack. Default shadow-v0 stays shadow-only.
+
 ### Stage 3 - Adaptive escalation
 
 Enable the independent OpenRouter free verifier only for primary uncertainty/disagreement.

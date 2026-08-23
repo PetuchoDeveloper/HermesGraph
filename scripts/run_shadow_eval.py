@@ -17,6 +17,7 @@ from shadow_orchestrator import run_manifest
 
 GROUND_TRUTH_LABELS = {"good", "semantic_fail", "hard_fail"}
 EXPECTED_POLICIES = {"accept_shadow", "would_reinspect", "reject_hard_check"}
+INTERVENTION_LABELS = {"HELPED", "HARMED", "WASTED", "NONE"}
 
 
 class SuiteError(ValueError):
@@ -59,6 +60,21 @@ def _load_case(case_path: Path) -> dict[str, Any]:
         raise SuiteError(f"case {case_id} has unknown ground_truth: {ground_truth!r}")
     if case["expected_policy"] not in EXPECTED_POLICIES:
         raise SuiteError(f"case {case_id} has unknown expected_policy: {case['expected_policy']!r}")
+    if "expected_intervention" in case:
+        if case["expected_intervention"] not in INTERVENTION_LABELS:
+            raise SuiteError(
+                f"case {case_id} has unknown expected_intervention: {case['expected_intervention']!r}"
+            )
+    fake_verdicts = case.get("fake_verdicts")
+    if fake_verdicts is None and "fake_verdict" in case:
+        fake_verdicts = [case["fake_verdict"]]
+    if fake_verdicts is not None:
+        if not isinstance(fake_verdicts, list) or not fake_verdicts:
+            raise SuiteError(f"case {case_id}.fake_verdicts must be a non-empty array")
+        for item in fake_verdicts:
+            if item not in {"PASS", "FAIL"}:
+                raise SuiteError(f"case {case_id} has unknown fake verdict: {item!r}")
+        case["fake_verdicts"] = fake_verdicts
     if not isinstance(case["verifier_should_run"], bool):
         raise SuiteError(f"case {case_id}.verifier_should_run must be boolean")
     case["case_path"] = case_path
@@ -138,19 +154,24 @@ def load_suite(path: str | Path) -> dict[str, Any]:
 
 
 class ScriptedVerifier:
-    """Offline verifier whose verdict is frozen in the case metadata."""
+    """Offline verifier whose verdict sequence is frozen in the case metadata."""
 
-    def __init__(self, verdict: str):
-        if verdict not in {"PASS", "FAIL"}:
-            raise SuiteError(f"offline verifier verdict must be PASS or FAIL: {verdict!r}")
-        self.verdict = verdict
+    def __init__(self, verdicts: str | list[str]):
+        if isinstance(verdicts, str):
+            verdicts = [verdicts]
+        if not verdicts or any(item not in {"PASS", "FAIL"} for item in verdicts):
+            raise SuiteError(f"offline verifier verdicts must be PASS or FAIL: {verdicts!r}")
+        self.verdicts = list(verdicts)
+        self.index = 0
         self.calls: list[dict[str, Any]] = []
 
     def score(self, packet: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(packet)
-        score = 1.0 if self.verdict == "PASS" else 0.0
+        verdict = self.verdicts[min(self.index, len(self.verdicts) - 1)]
+        self.index += 1
+        score = 1.0 if verdict == "PASS" else 0.0
         return {
-            "verdict": self.verdict,
+            "verdict": verdict,
             "normalized_score": score,
             "entropy": 0.0,
             "margin": 1.0,
@@ -221,7 +242,8 @@ def run_case(
         artifacts.mkdir(parents=True)
 
     if offline and verifier is None:
-        verifier = ScriptedVerifier(str(case.get("fake_verdict", "PASS")))
+        verdicts = case.get("fake_verdicts") or [str(case.get("fake_verdict", "PASS"))]
+        verifier = ScriptedVerifier(verdicts)
 
     worker_script = Path(__file__).resolve().with_name("apply_eval_candidate.py")
     with tempfile.TemporaryDirectory(prefix=f"hermesgraph-shadow-{case_id}-") as temp_dir:
@@ -229,7 +251,7 @@ def run_case(
         worktree = materialize_case(case, temporary_root / "worktree")
         manifest_path = temporary_root / "manifest.json"
         manifest = {
-            "run_id": f"shadow-v0-{case_id}",
+            "run_id": f"{case.get('family', 'shadow')}-{case_id}",
             "task_spec": str(task_path),
             "worktree": str(worktree),
             "worker": {
@@ -247,24 +269,38 @@ def run_case(
             "output_dir": str(artifacts),
             "provider": {"name": "cloudflare-workers-ai"},
         }
+        repair_dir = case_dir / "repair"
+        if repair_dir.is_dir():
+            manifest["stage2"] = {"allow_one_repair": True}
+            manifest["repair"] = {
+                "command": [sys.executable, str(worker_script), str(repair_dir)],
+                "timeout_seconds": 30,
+            }
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         result = run_manifest(manifest_path, verifier=verifier)
 
     verifier_results = result.record.get("verifier_results", [])
-    first_verifier = verifier_results[0] if verifier_results else None
+    last_verifier = verifier_results[-1] if verifier_results else None
+    intervention = str(result.record.get("intervention_outcome") or "NONE")
+    matched = result.policy_action == case["expected_policy"]
+    if "expected_intervention" in case:
+        matched = matched and intervention == case["expected_intervention"]
     summary = {
         "id": case_id,
         "ground_truth": case["ground_truth"],
         "expected_policy": case["expected_policy"],
+        "expected_intervention": case.get("expected_intervention"),
         "actual_policy": result.policy_action,
-        "match": result.policy_action == case["expected_policy"],
+        "intervention_outcome": intervention,
+        "match": matched,
         "verifier_called": bool(verifier_results),
-        "verdict": first_verifier.get("verdict") if isinstance(first_verifier, dict) else None,
-        "normalized_score": first_verifier.get("normalized_score") if isinstance(first_verifier, dict) else None,
-        "entropy": first_verifier.get("entropy") if isinstance(first_verifier, dict) else None,
-        "margin": first_verifier.get("margin") if isinstance(first_verifier, dict) else None,
-        "verifier_tokens": _verifier_tokens(first_verifier if isinstance(first_verifier, dict) else None),
+        "verdict": last_verifier.get("verdict") if isinstance(last_verifier, dict) else None,
+        "normalized_score": last_verifier.get("normalized_score") if isinstance(last_verifier, dict) else None,
+        "entropy": last_verifier.get("entropy") if isinstance(last_verifier, dict) else None,
+        "margin": last_verifier.get("margin") if isinstance(last_verifier, dict) else None,
+        "verifier_tokens": _verifier_tokens(last_verifier if isinstance(last_verifier, dict) else None),
         "repair_invoked": bool(result.record.get("repair_invoked", False)),
+        "rollback_used": bool(result.record.get("rollback_used", False)),
         "instruction_written": bool((result.record.get("stage1") or {}).get("instruction_written")),
         "instruction_bytes": int((result.record.get("stage1") or {}).get("instruction_bytes") or 0),
         "instruction_tokens_est": int((result.record.get("stage1") or {}).get("instruction_tokens_est") or 0),
@@ -293,7 +329,11 @@ def build_report(suite: Mapping[str, Any], summaries: list[dict[str, Any]]) -> d
     interventions = 0
     instruction_bytes = 0
     instruction_tokens = 0
+    outcomes = {"HELPED": 0, "HARMED": 0, "WASTED": 0, "NONE": 0}
     for summary in summaries:
+        outcome = str(summary.get("intervention_outcome") or "NONE")
+        if outcome in outcomes:
+            outcomes[outcome] += 1
         if summary.get("repair_invoked"):
             repair_invoked += 1
         if summary.get("instruction_written"):
@@ -337,6 +377,7 @@ def build_report(suite: Mapping[str, Any], summaries: list[dict[str, Any]]) -> d
         "intervention_rate": (interventions / len(summaries)) if summaries else 0.0,
         "instruction_bytes_total": instruction_bytes,
         "instruction_tokens_est_total": instruction_tokens,
+        "stage2_outcomes": outcomes,
     }
 
 
